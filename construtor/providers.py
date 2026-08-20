@@ -104,7 +104,10 @@ class OpenAICompatProvider:
             ],
         }).encode("utf-8")
 
-        headers = {"Content-Type": "application/json"}
+        # O "User-Agent" evita que provedores atrás do Cloudflare (ex.: Groq)
+        # bloqueiem a requisição como se fosse um robô (erro 403 code 1010).
+        headers = {"Content-Type": "application/json",
+                   "User-Agent": "Construtor/1.0 (+https://github.com/Vitor-AM-IO)"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
