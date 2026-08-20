@@ -33,7 +33,7 @@ class ProviderError(Exception):
 
 
 # Presets de provedores compatíveis com OpenAI: (base_url, variável da chave).
-# CODE_DOCTOR_BASE_URL sempre pode sobrescrever a base.
+# CONSTRUTOR_BASE_URL sempre pode sobrescrever a base.
 _OPENAI_PRESETS = {
     "openai":     ("https://api.openai.com/v1", "OPENAI_API_KEY"),
     "openrouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY"),
@@ -43,7 +43,7 @@ _OPENAI_PRESETS = {
     "mistral":    ("https://api.mistral.ai/v1", "MISTRAL_API_KEY"),
     "ollama":     ("http://localhost:11434/v1", None),      # local, sem chave
     "lmstudio":   ("http://localhost:1234/v1", None),       # local, sem chave
-    "custom":     (None, "CODE_DOCTOR_API_KEY"),            # tudo via env
+    "custom":     (None, "CONSTRUTOR_API_KEY"),            # tudo via env
 }
 
 KNOWN_PROVIDERS = ["anthropic", *_OPENAI_PRESETS.keys()]
@@ -140,13 +140,22 @@ class OpenAICompatProvider:
         return text, usage
 
 
+
+def _env(nome: str, padrao: str = "") -> str:
+    """Lê CONSTRUTOR_<nome> primeiro; cai para CODE_DOCTOR_<nome> por compatibilidade."""
+    v = os.environ.get(f"CONSTRUTOR_{nome}", "").strip()
+    if v:
+        return v
+    return os.environ.get(f"CODE_DOCTOR_{nome}", padrao).strip()
+
+
 def get_provider(name: str | None = None, model: str | None = None):
     """Monta o provedor a partir das variáveis de ambiente / flags.
 
-    Seleção: --provider  >  CODE_DOCTOR_PROVIDER  >  'anthropic'.
+    Seleção: --provider  >  CONSTRUTOR_PROVIDER  >  'anthropic'.
     """
-    name = (name or os.environ.get("CODE_DOCTOR_PROVIDER", "anthropic")).lower().strip()
-    model = model or os.environ.get("CODE_DOCTOR_MODEL", "")
+    name = (name or _env("PROVIDER", "anthropic")).lower().strip()
+    model = model or _env("MODEL", "")
 
     if name == "anthropic":
         key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
@@ -154,40 +163,40 @@ def get_provider(name: str | None = None, model: str | None = None):
             raise ProviderError(
                 "provedor 'anthropic' selecionado, mas ANTHROPIC_API_KEY não está "
                 "definida. Defina a chave ou escolha outro provedor com "
-                "CODE_DOCTOR_PROVIDER (ex.: openai, openrouter, groq, ollama)."
+                "CONSTRUTOR_PROVIDER (ex.: openai, openrouter, groq, ollama)."
             )
         return AnthropicProvider(api_key=key, model=model or "claude-sonnet-5")
 
     if name not in _OPENAI_PRESETS:
         raise ProviderError(
             f"provedor '{name}' desconhecido. Opções: {', '.join(KNOWN_PROVIDERS)}. "
-            "Para um endpoint próprio use CODE_DOCTOR_PROVIDER=custom e "
-            "CODE_DOCTOR_BASE_URL=..."
+            "Para um endpoint próprio use CONSTRUTOR_PROVIDER=custom e "
+            "CONSTRUTOR_BASE_URL=..."
         )
 
     preset_base, key_var = _OPENAI_PRESETS[name]
-    base_url = os.environ.get("CODE_DOCTOR_BASE_URL", "").strip() or preset_base
+    base_url = _env("BASE_URL") or preset_base
     if not base_url:
         raise ProviderError(
-            f"provedor '{name}' precisa de CODE_DOCTOR_BASE_URL definido."
+            f"provedor '{name}' precisa de CONSTRUTOR_BASE_URL definido."
         )
 
-    # chave: variável específica do preset, ou a genérica CODE_DOCTOR_API_KEY.
+    # chave: variável específica do preset, ou a genérica CONSTRUTOR_API_KEY.
     key = ""
     if key_var:
         key = os.environ.get(key_var, "").strip()
-    key = key or os.environ.get("CODE_DOCTOR_API_KEY", "").strip()
+    key = key or _env("API_KEY")
 
     # locais (ollama/lmstudio) não exigem chave.
     if not key and name not in ("ollama", "lmstudio"):
         raise ProviderError(
             f"provedor '{name}' precisa de uma chave de API. Defina "
-            f"{key_var or 'CODE_DOCTOR_API_KEY'}."
+            f"{key_var or 'CONSTRUTOR_API_KEY'}."
         )
 
     if not model:
         raise ProviderError(
-            f"defina o modelo com CODE_DOCTOR_MODEL (ou --model) para o provedor "
+            f"defina o modelo com CONSTRUTOR_MODEL (ou --model) para o provedor "
             f"'{name}'. Ex.: gpt-4o-mini, llama3.1, deepseek-chat, etc."
         )
 
